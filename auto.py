@@ -13,7 +13,8 @@ import webbrowser
 import requests
 import customtkinter as ctk
 import uiautomator2 as u2
-
+import uuid
+import hashlib
 # ==========================================
 # 🚨 NUITKA UIAUTOMATOR CRASH FIX (CORE PATCH)
 # ==========================================
@@ -2166,3 +2167,126 @@ if __name__ == "__main__":
     
     # Start background threads
     threading.Thread(target=background_battery_simulator, daemon=True).start()
+    import hashlib
+import threading
+import time
+import tkinter as tk
+from tkinter import filedialog
+import uuid
+import customtkinter as ctk
+
+# ---------------------------------------------------------
+# ১. লাইসেন্স ও HWID তৈরি
+# ---------------------------------------------------------
+def get_hwid():
+    """ডিভাইসের ইউনিক HWID তৈরি করে"""
+    raw_id = f"{uuid.getnode()}-{uuid.uuid4()}"
+    return hashlib.sha256(raw_id.encode()).hexdigest()[:16]
+
+# ---------------------------------------------------------
+# ২. গ্লোবাল ডাটা ডিকশনারি (Global Configuration)
+# ---------------------------------------------------------
+gui_data = {
+    "target_file": "",
+    "use_proxy": False,
+    "proxy_list": [],
+    "is_running": False,
+    "hwid": get_hwid()
+}
+
+# ---------------------------------------------------------
+# ৩. ব্যাকগ্রাউন্ড থ্রেড ও টাস্ক লজিক
+# ---------------------------------------------------------
+def worker_task(log_callback):
+    """ব্যাকগ্রাউন্ডে মূল কাজ পরিচালনা করার ফাংশন"""
+    log_callback("[INFO] প্রসেস শুরু হয়েছে...")
+    
+    # প্রক্সি লোড চেক
+    if gui_data["use_proxy"]:
+        log_callback(f"[PROXY] মোট প্রক্সি সংখ্যা: {len(gui_data['proxy_list'])}")
+    
+    count = 0
+    while gui_data["is_running"]:
+        count += 1
+        log_callback(f"[TASK] টাস্ক নম্বর #{count} প্রসেস হচ্ছে...")
+        time.sleep(2) # সিমুলেটেড ডিলে
+        
+        if count >= 10: # উদাহরণস্বরূপ ১০টি টাস্কের পর থামা
+            log_callback("[SUCCESS] সমস্ত টাস্ক সফলভাবে সম্পন্ন হয়েছে।")
+            gui_data["is_running"] = False
+            break
+
+    log_callback("[INFO] প্রসেস বন্ধ করা হয়েছে।")
+
+# ---------------------------------------------------------
+# ৪. CustomTkinter GUI অ্যাপ্লিকেশন
+# ---------------------------------------------------------
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        self.title(f"Automation Dashboard - HWID: {gui_data['hwid']}")
+        self.geometry("650x500")
+        ctk.set_appearance_mode("System")
+        ctk.set_default_color_theme("blue")
+
+        # Layout Configuration
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+
+        # File Selection Frame
+        self.file_frame = ctk.CTkFrame(self)
+        self.file_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
+
+        self.btn_load_file = ctk.CTkButton(self.file_frame, text="ফাইল লোড করুন (.txt)", command=self.load_file)
+        self.btn_load_file.pack(side="left", padx=10, pady=10)
+
+        self.lbl_file_status = ctk.CTkLabel(self.file_frame, text="কোনো ফাইল সিলেক্ট করা হয়নি")
+        self.lbl_file_status.pack(side="left", padx=10, pady=10)
+
+        # Controls Frame
+        self.control_frame = ctk.CTkFrame(self)
+        self.control_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+
+        self.btn_start = ctk.CTkButton(self.control_frame, text="Start", fg_color="green", command=self.start_process)
+        self.btn_start.pack(side="left", padx=10, pady=10)
+
+        self.btn_stop = ctk.CTkButton(self.control_frame, text="Stop", fg_color="red", command=self.stop_process)
+        self.btn_stop.pack(side="left", padx=10, pady=10)
+
+        # Log Window
+        self.log_box = ctk.CTkTextbox(self, width=600, height=250)
+        self.log_box.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
+
+    def log(self, message):
+        """লগ উইন্ডোতে মেসেজ প্রিন্ট করার মেথড"""
+        self.log_box.insert(tk.END, f"{message}\n")
+        self.log_box.see(tk.END)
+
+    def load_file(self):
+        """টেক্সট ফাইল লোড করার মেথড"""
+        file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+        if file_path:
+            gui_data["target_file"] = file_path
+            self.lbl_file_status.configure(text=f"লোড করা ফাইল: {file_path.split('/')[-1]}")
+            self.log(f"[FILE] ফাইল লোড করা হয়েছে: {file_path}")
+
+    def start_process(self):
+        """কাজ শুরু করার বোতামের লজিক"""
+        if not gui_data["is_running"]:
+            gui_data["is_running"] = True
+            # ব্যাকগ্রাউন্ড থ্রেডে কাজ চালানো হচ্ছে যাতে UI হ্যাং না করে
+            threading.Thread(target=worker_task, args=(self.log,), daemon=True).start()
+
+    def stop_process(self):
+        """কাজ বন্ধ করার বোতামের লজিক"""
+        if gui_data["is_running"]:
+            gui_data["is_running"] = False
+            self.log("[WAIT] প্রসেস বন্ধ করার অনুরোধ পাঠানো হয়েছে...")
+
+# ---------------------------------------------------------
+# ৫. মূল প্রোগ্রাম রান
+# ---------------------------------------------------------
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
